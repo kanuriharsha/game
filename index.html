@@ -520,23 +520,45 @@
     }
 
     function closeGame() {
-      if (activeGame && activeGame.destroy) activeGame.destroy();
-      activeGame = null;
-      overlay.style.display = 'none';
-      gameOpen = false;
-      scoreChip.classList.remove('highlight');
+    // Stop active game if exists
+    if (activeGame && typeof activeGame.destroy === 'function') {
+        try {
+            activeGame.destroy(); // Safely stop game loop
+        } catch (err) {
+            console.error('Error destroying game:', err);
+        }
+    }
+    activeGame = null;          // Clear reference
+    gameOpen = false;           // Mark game as closed
 
-      // Exit fullscreen
-      if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(err => console.log('Exit fullscreen error:', err));
-      }
+    // Hide overlay and UI elements
+    const overlay = document.getElementById('gameOverlay');
+    if (overlay) overlay.style.display = 'none';
+    
+    const scoreChip = document.getElementById('scoreChip');
+    if (scoreChip) scoreChip.classList.remove('highlight');
 
-      // Pop history state
-      if (window.history.state) {
-        window.history.back();
-      }
+    // Exit fullscreen if active
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => console.error('Exit fullscreen failed:', err));
     }
 
+    // Clean up any timers or intervals
+    if (window.gameInterval) {
+        clearInterval(window.gameInterval);
+        window.gameInterval = null;
+    }
+    if (window.gameTimeout) {
+        clearTimeout(window.gameTimeout);
+        window.gameTimeout = null;
+    }
+
+    // Optional: reset other game state variables
+    if (typeof resetGameState === 'function') resetGameState();
+
+    // Handle back button history
+    if (window.history.state) window.history.back();
+}
     function onScore(n) {
       currentScoreEl.textContent = n;
       globalScoreEl.textContent = n;
@@ -736,15 +758,26 @@
 
 
     // 2) Enhanced 2048 with better game over detection
-    function create2048(host, scoreCb, gameOverCb) {
+function create2048(host, gameOverCb) {
   const wrapper = document.createElement('div');
   wrapper.style.width = '100%';
   wrapper.style.padding = '10px';
   wrapper.style.boxSizing = 'border-box';
   wrapper.style.display = 'flex';
-  wrapper.style.justifyContent = 'center';
+  wrapper.style.flexDirection = 'column';
+  wrapper.style.alignItems = 'center';
+
   const gridSize = 4;
   const board = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+
+  // Score display like Snake game
+  const scoreDiv = document.createElement('div');
+  scoreDiv.style.color = '#fff';
+  scoreDiv.style.fontSize = '22px';
+  scoreDiv.style.fontWeight = 'bold';
+  scoreDiv.style.marginBottom = '10px';
+  scoreDiv.textContent = 'Score: 0';
+  wrapper.appendChild(scoreDiv);
 
   function el(tag, cls) {
     const d = document.createElement(tag);
@@ -824,9 +857,9 @@
       }
     }
 
-    // Update score: highest number on the board
+    // Update score: highest tile
     const maxTile = Math.max(...board.flat());
-    scoreCb(maxTile);
+    scoreDiv.textContent = 'Score: ' + maxTile;
   }
 
   function moveLeft() {
@@ -906,10 +939,7 @@
     const dx = t.clientX - ts.clientX, dy = t.clientY - ts.clientY;
     const adx = Math.abs(dx), ady = Math.abs(dy);
 
-    if (Math.max(adx, ady) < 20) {
-      ts = null;
-      return;
-    }
+    if (Math.max(adx, ady) < 20) { ts = null; return; }
 
     const dirm = adx > ady ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
     const moved = move(dirm);
@@ -949,6 +979,7 @@
   start();
   return { start, restart, destroy: () => host.removeChild(wrapper), handleKeyboard };
 }
+
 
     // 3) Enhanced Flamingo with beautiful colors and animations
     function createFlappy(host, scoreCb, gameOverCb) {
